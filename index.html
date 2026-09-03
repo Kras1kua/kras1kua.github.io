@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Обо мне — Антон</title>
+  <style>
+    /* Общие настройки страницы */
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f2f4f7;
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      color: #1f2933;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+
+    /* Карточка по центру */
+    .card {
+      background: #ffffff;
+      max-width: 420px;
+      width: 100%;
+      padding: 32px;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      text-align: center;
+      box-sizing: border-box;
+    }
+
+    /* Круглая заглушка вместо фото.
+       Чтобы поставить настоящее фото: положи файл photo.jpg в эту папку
+       и замени <div class="photo">А</div> ниже на строку:
+       <img class="photo" src="photo.jpg" alt="Фото Антона"> */
+    .photo {
+      width: 128px;
+      height: 128px;
+      border-radius: 50%;
+      margin: 0 auto 20px;
+      background: #d9dee5;
+      color: #6b7683;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      font-weight: 600;
+      object-fit: cover; /* пригодится, когда здесь будет <img> */
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 26px;
+    }
+
+    p {
+      margin: 0 0 24px;
+      line-height: 1.6;
+      color: #52606d;
+    }
+
+    /* Кнопка-ссылка на почту */
+    .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      border-radius: 10px;
+      background: #2563eb;
+      color: #ffffff;
+      text-decoration: none;
+      font-weight: 600;
+      transition: background 0.2s ease;
+    }
+
+    .btn:hover {
+      background: #1d4ed8;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <!-- Заглушка вместо фотографии. Как заменить на настоящее фото — см. комментарий в <style> -->
+    <div class="photo">А</div>
+
+    <h1>Антон</h1>
+
+    <p>
+      Я учусь работать с Claude Code.
+      Моя цель — научиться делать сайты.
+    </p>
+
+    <a class="btn" href="mailto:sapfutr7@gmail.com">Написать мне</a>
+  </main>
+</body>
+</html>
