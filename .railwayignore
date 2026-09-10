@@ -1,0 +1,8 @@
+.env
+.git
+.claude
+.playwright-mcp
+node_modules
+ask-openrouter.js
+design.md
+github.png
