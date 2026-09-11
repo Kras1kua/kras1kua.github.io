@@ -4,13 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Google Analytics (GA4) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-JTXYY9B4R5"></script>
+  <!-- Google Analytics (GA4) + Consent Mode v2.
+       Счётчик НЕ загружается и НЕ шлёт данные, пока человек не нажмёт «Принять»
+       в баннере внизу страницы (см. скрипт перед </body>). -->
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-JTXYY9B4R5');
+    gtag('consent', 'default', {
+      'ad_storage': 'denied',
+      'ad_user_data': 'denied',
+      'ad_personalization': 'denied',
+      'analytics_storage': 'denied',
+      'wait_for_update': 500
+    });
+    window.__gaLoaded = false;
+    window.trackEvent = function (name, params) {
+      if (!window.__gaLoaded) return;
+      gtag('event', name, params || {});
+    };
   </script>
 
   <title>Обо мне — Антон</title>
@@ -110,15 +121,71 @@
     if (!link) return;
     var href = link.getAttribute("href");
     if (/^https?:\/\/t\.me\//i.test(href)) {
-      gtag('event', 'contact_telegram_click', { event_category: 'contact', event_label: href });
+      trackEvent('contact_telegram_click', { event_category: 'contact', event_label: href });
     } else if (/^https?:\/\/(wa\.me|api\.whatsapp\.com)\//i.test(href)) {
-      gtag('event', 'contact_whatsapp_click', { event_category: 'contact', event_label: href });
+      trackEvent('contact_whatsapp_click', { event_category: 'contact', event_label: href });
     } else if (/^mailto:/i.test(href)) {
-      gtag('event', 'contact_email_click', { event_category: 'contact', event_label: href });
+      trackEvent('contact_email_click', { event_category: 'contact', event_label: href });
     } else if (/^tel:/i.test(href)) {
-      gtag('event', 'contact_phone_click', { event_category: 'contact', event_label: href });
+      trackEvent('contact_phone_click', { event_category: 'contact', event_label: href });
     }
   });
+</script>
+
+<script>
+  // Баннер согласия на аналитику (cookie consent) + запуск счётчика после «Принять».
+  (function () {
+    var GA_ID = "G-JTXYY9B4R5";
+    var CONSENT_KEY = "ga_consent";
+
+    function loadGA() {
+      if (window.__gaLoaded) return;
+      window.__gaLoaded = true;
+      gtag('consent', 'update', { analytics_storage: 'granted' });
+      var s = document.createElement("script");
+      s.async = true;
+      s.src = "https://www.googletagmanager.com/gtag/js?id=" + GA_ID;
+      document.head.appendChild(s);
+      gtag('js', new Date());
+      gtag('config', GA_ID);
+    }
+
+    function showBanner() {
+      var banner = document.createElement("div");
+      banner.setAttribute("role", "dialog");
+      banner.setAttribute("aria-label", "Согласие на использование аналитики");
+      banner.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#ffffff;border-top:1px solid #e2e8f0;color:#1f2933;padding:20px 24px;display:flex;flex-wrap:wrap;gap:16px 24px;align-items:center;justify-content:space-between;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;box-shadow:0 -4px 20px rgba(0,0,0,0.08);";
+      banner.innerHTML =
+        '<div style="max-width:480px;">' +
+          '<p style="margin:0 0 6px;font-size:15px;font-weight:600;">Мы используем аналитику</p>' +
+          '<p style="margin:0;font-size:13px;line-height:1.5;color:#52606d;">Собираем анонимную статистику посещений (Google Analytics), чтобы понимать, что улучшать на сайте. Без вашего согласия счётчик не запускается.</p>' +
+        '</div>' +
+        '<div style="display:flex;gap:12px;flex-shrink:0;">' +
+          '<button type="button" data-consent="reject" style="padding:10px 20px;border-radius:10px;border:1px solid #d1d5db;background:#ffffff;color:#1f2933;font-size:13px;cursor:pointer;">Отклонить</button>' +
+          '<button type="button" data-consent="accept" style="padding:10px 20px;border-radius:10px;border:0;background:#2563eb;color:#ffffff;font-size:13px;font-weight:600;cursor:pointer;">Принять</button>' +
+        '</div>';
+      document.body.appendChild(banner);
+
+      banner.querySelector('[data-consent="accept"]').addEventListener("click", function () {
+        try { localStorage.setItem(CONSENT_KEY, "granted"); } catch (e) {}
+        loadGA();
+        banner.remove();
+      });
+      banner.querySelector('[data-consent="reject"]').addEventListener("click", function () {
+        try { localStorage.setItem(CONSENT_KEY, "denied"); } catch (e) {}
+        gtag('consent', 'update', { analytics_storage: 'denied' });
+        banner.remove();
+      });
+    }
+
+    var saved = null;
+    try { saved = localStorage.getItem(CONSENT_KEY); } catch (e) {}
+    if (saved === "granted") {
+      loadGA();
+    } else if (saved !== "denied") {
+      showBanner();
+    }
+  })();
 </script>
 
 </body>
