@@ -105,7 +105,7 @@
       <p style="margin: clamp(28px, 5vh, 44px) 0 0; max-width: 640px; font-family: Newsreader, Georgia, serif; font-weight: 300; font-size: clamp(20px, 2.4vw, 27px); line-height: 1.45; color: oklch(0.88 0.01 70); text-wrap: pretty;">Собираю продажи малого и среднего бизнеса под ключ: трафик, конверсия и отдел продаж — весь цикл на мне.</p>
       <p style="margin: 20px 0 0; font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.06em; color: oklch(0.60 0.012 70);">10 лет в продажах &middot; рост клиентов до &times;100 по сделкам &middot; команды до 80 человек</p>
       <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin-top: clamp(36px, 6vh, 56px);">
-        <a class="btn-solid" href="#lead-form" style="display: inline-flex; align-items: center; gap: 14px; padding: 16px 32px; border-radius: 999px; background: oklch(0.94 0.008 70); color: oklch(0.155 0.006 60); font-size: 14px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase;">Оставить заявку
+        <a id="hero-cta" class="btn-solid" href="#lead-form" style="display: inline-flex; align-items: center; gap: 14px; padding: 16px 32px; border-radius: 999px; background: oklch(0.94 0.008 70); color: oklch(0.155 0.006 60); font-size: 14px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase;">Оставить заявку
           <span style="width: 5px; height: 5px; border-radius: 50%; background: oklch(0.155 0.006 60);"></span>
         </a>
         <a class="btn-outline" href="https://t.me/kras1k1654" style="display: inline-flex; align-items: center; gap: 14px; padding: 16px 30px; border: 1px solid oklch(0.42 0.02 70); border-radius: 999px; font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; color: oklch(0.94 0.008 70);">Написать мне
@@ -354,6 +354,7 @@
             .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, j: j }; }); })
             .then(function (res) {
               if (res.ok) {
+                gtag('event', 'lead_form_submit', { event_category: 'lead', event_label: service });
                 form.reset();
                 clearErrors();
                 status.style.color = OK_COLOR;
@@ -402,6 +403,33 @@
 
   </div>
 </div>
+
+<script>
+  // Клики по главной кнопке и по контактным ссылкам — события в Google Analytics.
+  (function () {
+    var heroCta = document.getElementById("hero-cta");
+    if (heroCta) {
+      heroCta.addEventListener("click", function () {
+        gtag('event', 'hero_cta_click', { event_category: 'engagement', event_label: 'Оставить заявку — кнопка на первом экране' });
+      });
+    }
+
+    document.addEventListener("click", function (e) {
+      var link = e.target.closest("a[href]");
+      if (!link) return;
+      var href = link.getAttribute("href");
+      if (/^https?:\/\/t\.me\//i.test(href)) {
+        gtag('event', 'contact_telegram_click', { event_category: 'contact', event_label: href });
+      } else if (/^https?:\/\/(wa\.me|api\.whatsapp\.com)\//i.test(href)) {
+        gtag('event', 'contact_whatsapp_click', { event_category: 'contact', event_label: href });
+      } else if (/^mailto:/i.test(href)) {
+        gtag('event', 'contact_email_click', { event_category: 'contact', event_label: href });
+      } else if (/^tel:/i.test(href)) {
+        gtag('event', 'contact_phone_click', { event_category: 'contact', event_label: href });
+      }
+    });
+  })();
+</script>
 
 </body>
 </html>

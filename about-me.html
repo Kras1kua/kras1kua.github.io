@@ -102,5 +102,24 @@
 
     <a class="btn" href="mailto:sapfutr7@gmail.com">Написать мне</a>
   </main>
+
+<script>
+  // Клик по контактной ссылке — событие в Google Analytics.
+  document.addEventListener("click", function (e) {
+    var link = e.target.closest("a[href]");
+    if (!link) return;
+    var href = link.getAttribute("href");
+    if (/^https?:\/\/t\.me\//i.test(href)) {
+      gtag('event', 'contact_telegram_click', { event_category: 'contact', event_label: href });
+    } else if (/^https?:\/\/(wa\.me|api\.whatsapp\.com)\//i.test(href)) {
+      gtag('event', 'contact_whatsapp_click', { event_category: 'contact', event_label: href });
+    } else if (/^mailto:/i.test(href)) {
+      gtag('event', 'contact_email_click', { event_category: 'contact', event_label: href });
+    } else if (/^tel:/i.test(href)) {
+      gtag('event', 'contact_phone_click', { event_category: 'contact', event_label: href });
+    }
+  });
+</script>
+
 </body>
 </html>
