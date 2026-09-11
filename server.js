@@ -9,6 +9,23 @@ const { Pool } = require("pg");
 const ROOT = __dirname;
 const PORT = process.env.PORT || 3000;
 
+// Услуги из выпадающего списка формы. Сервер принимает ТОЛЬКО эти значения —
+// если пришло что-то другое, заявка отклоняется. Список должен совпадать с
+// вариантами <option> в index.html.
+const SERVICES = [
+  "Отдел продаж под ключ",
+  "Привлечение клиентов",
+  "Продуктовый маркетинг и запуски",
+  "Аудит и рост продаж",
+  "Крипта и Web3",
+  "Бесплатный аудит",
+  "Другое / не уверен",
+];
+
+// Данные для уведомления в Telegram — только из переменных окружения.
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
+
 const TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -60,6 +77,10 @@ async function initDb() {
         created_at timestamptz NOT NULL DEFAULT now()
       )
     `);
+    // Поля новой формы. Старая колонка message остаётся, её просто перестают
+    // заполнять. IF NOT EXISTS — чтобы миграция была безопасной при каждом старте.
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS service text`);
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS comment text`);
     console.log("Таблица leads готова.");
   } catch (err) {
     console.error("Не удалось создать таблицу leads:", err.message);
@@ -123,6 +144,63 @@ function rateLimited(ip) {
   return hits.length > RATE_MAX;
 }
 
+// "Как связаться" — одно поле: телефон ИЛИ Telegram. Та же логика на странице.
+function isValidContact(value) {
+  const s = String(value || "").trim();
+  if (s.length < 3 || s.length > 120) return false;
+  const digitCount = (s.match(/\d/g) || []).length;
+  const phoneLike = /^\+?[\d\s()\-]{7,20}$/.test(s) && digitCount >= 7;
+  const tgHandle = /^@?[A-Za-z0-9_]{4,32}$/.test(s);
+  const tgLink = /^(https?:\/\/)?t\.me\/[A-Za-z0-9_]{4,32}\/?$/i.test(s);
+  return phoneLike || tgHandle || tgLink;
+}
+
+// Уведомление владельцу в Telegram. Токен и chat_id — только из окружения,
+// на страницу они не попадают. Ошибку не пробрасываем: заявка уже в базе,
+// посетителю показываем успех в любом случае.
+async function notifyTelegram(lead) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    console.warn("TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID не заданы — уведомление пропущено.");
+    return false;
+  }
+  const esc = (v) =>
+    String(v).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+  const lines = [
+    `<b>Новая заявка #${lead.id}</b>`,
+    `Имя: ${esc(lead.name)}`,
+    `Связь: ${esc(lead.contact)}`,
+    `Услуга: ${esc(lead.service)}`,
+  ];
+  if (lead.comment) lines.push(`Комментарий: ${esc(lead.comment)}`);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const resp = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: lines.join("\n"),
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+      }),
+      signal: controller.signal,
+    });
+    if (!resp.ok) {
+      const detail = await resp.text().catch(() => "");
+      console.error("Telegram ответил", resp.status, detail.slice(0, 200));
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Не удалось отправить в Telegram:", err.message);
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // --- Обработчики маршрутов ----------------------------------------------------
 async function handleHealthDb(res) {
   if (!pool) return sendJson(res, 503, { ok: false, error: "DATABASE_URL не задана" });
@@ -159,33 +237,55 @@ async function handleLead(req, res) {
   // что всё хорошо, но в базу не пишем.
   if (body.company) return sendJson(res, 200, { ok: true });
 
+  // --- Проверка полей на сервере (главный рубеж, браузеру не доверяем) ---
   const name = String(body.name || "").trim();
   const contact = String(body.contact || "").trim();
-  const message = String(body.message || body.project || "").trim();
+  const service = String(body.service || "").trim();
+  const comment = String(body.comment || "").trim();
 
-  if (name.length < 1 || name.length > 200) {
-    return sendJson(res, 400, { ok: false, error: "Укажите имя" });
+  if (name.length < 2 || name.length > 120) {
+    return sendJson(res, 400, { ok: false, field: "name", error: "Укажите имя (2–120 символов)" });
   }
-  if (contact.length < 1 || contact.length > 200) {
-    return sendJson(res, 400, { ok: false, error: "Укажите способ связи" });
+  if (!isValidContact(contact)) {
+    return sendJson(res, 400, {
+      ok: false,
+      field: "contact",
+      error: "Укажите телефон или ник в Telegram (@имя)",
+    });
   }
-  if (message.length > 5000) {
-    return sendJson(res, 400, { ok: false, error: "Сообщение слишком длинное" });
+  if (!SERVICES.includes(service)) {
+    return sendJson(res, 400, { ok: false, field: "service", error: "Выберите услугу из списка" });
+  }
+  if (comment.length > 2000) {
+    return sendJson(res, 400, {
+      ok: false,
+      field: "comment",
+      error: "Комментарий слишком длинный (до 2000 символов)",
+    });
   }
 
+  // --- 1. Запись в базу ---
+  let lead;
   try {
     const r = await pool.query(
-      `INSERT INTO leads (name, contact, message, source, user_agent, ip)
-       VALUES ($1, $2, $3, 'landing', $4, $5)
+      `INSERT INTO leads (name, contact, service, comment, source, user_agent, ip)
+       VALUES ($1, $2, $3, $4, 'landing', $5, $6)
        RETURNING id, created_at`,
-      [name, contact, message, req.headers["user-agent"] || null, ip]
+      [name, contact, service, comment, req.headers["user-agent"] || null, ip]
     );
-    console.log(`Новая заявка #${r.rows[0].id} от ${name}`);
-    sendJson(res, 201, { ok: true, id: r.rows[0].id, created_at: r.rows[0].created_at });
+    lead = { id: r.rows[0].id, created_at: r.rows[0].created_at, name, contact, service, comment };
+    console.log(`Новая заявка #${lead.id} от ${name} — ${service}`);
   } catch (err) {
     console.error("Не удалось сохранить заявку:", err.message);
-    sendJson(res, 500, { ok: false, error: "Не удалось сохранить заявку" });
+    return sendJson(res, 500, { ok: false, error: "Не удалось сохранить заявку" });
   }
+
+  // --- 2. Уведомление в Telegram (заявка уже сохранена; сбой не роняет ответ) ---
+  const notified = await notifyTelegram(lead);
+  if (!notified) console.warn(`Заявка #${lead.id}: уведомление в Telegram не доставлено.`);
+
+  // --- 3. Ответ странице: успех в любом случае, раз заявка в базе ---
+  sendJson(res, 201, { ok: true, id: lead.id, notified });
 }
 
 // Просмотр последних заявок. Доступ по токену из переменной ADMIN_TOKEN:
@@ -201,7 +301,7 @@ async function handleLeadsList(req, res) {
 
   try {
     const r = await pool.query(
-      `SELECT id, name, contact, message, source, created_at
+      `SELECT id, name, contact, service, comment, message, source, created_at
        FROM leads ORDER BY id DESC LIMIT 50`
     );
     sendJson(res, 200, { ok: true, count: r.rowCount, leads: r.rows });
